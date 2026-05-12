@@ -1,0 +1,31 @@
+[project]
+name = "bedtime-lights"
+version = "0.1.0"
+description = "Home Assistant bedtime lights notification service."
+requires-python = ">=3.11"
+dependencies = [
+  "aiohttp>=3.9.0",
+  "homelab-functions @ https://github.com/feocco/homelab-functions/archive/refs/heads/main.zip",
+  "python-dotenv>=1.0.0",
+  "PyYAML>=6.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "pytest-asyncio>=0.23.0",
+]
+
+[project.scripts]
+bedtime-lights = "bedtime_lights.main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["bedtime_lights*"]

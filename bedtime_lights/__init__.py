@@ -1,0 +1,2 @@
+"""Bedtime lights notification service."""
+
