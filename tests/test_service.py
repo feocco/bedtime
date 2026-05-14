@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from bedtime_lights.config import (
@@ -9,7 +9,6 @@ from bedtime_lights.config import (
     BedtimeConfig,
     NightWindowConfig,
     NotificationConfig,
-    PersonConfig,
     PixelConfig,
 )
 from bedtime_lights.runtime_state import RuntimeState
@@ -48,19 +47,12 @@ def config() -> BedtimeConfig:
     return BedtimeConfig(
         timezone="America/New_York",
         night_window=NightWindowConfig(start="21:45", end="04:00"),
-        presence_fresh_minutes=20,
-        people=[
-            PersonConfig(
-                name="Sleeper A",
-                presence_start_entity="sensor.side_a_presence_start",
-                presence_end_entity="sensor.side_a_presence_end",
-            )
-        ],
         pixel=PixelConfig(
             battery_state_entity="sensor.pixel_battery_state",
             charger_type_entity="sensor.pixel_charger_type",
         ),
         action=ActionConfig(script_entity="script.turn_off_all_lights"),
+        delayed_action_minutes=30,
         notification=NotificationConfig(
             title="Bedtime lights",
             message="Turn off the lights?",
@@ -73,8 +65,6 @@ def test_evaluate_and_notify_sends_once_with_action_button() -> None:
     notifier = FakeNotifier()
     state = RuntimeState()
     service = BedtimeService(config(), ha=ha, notifier=notifier, state=state)
-    service.update_state("sensor.side_a_presence_start", "2026-05-12T02:05:00+00:00")
-    service.update_state("sensor.side_a_presence_end", "2026-05-12T04:28:30+00:00")
     service.update_state("sensor.pixel_battery_state", "charging")
     service.update_state("sensor.pixel_charger_type", "ac")
 
@@ -89,6 +79,8 @@ def test_evaluate_and_notify_sends_once_with_action_button() -> None:
     assert notifier.sends[0]["group"] == "bedtime-lights"
     assert notifier.sends[0]["buttons"][0]["title"] == "Turn off lights"
     assert notifier.sends[0]["buttons"][0]["action"].startswith("BEDTIME_TURN_OFF_LIGHTS::")
+    assert notifier.sends[0]["buttons"][1]["title"] == "Turn off in 30 min"
+    assert notifier.sends[0]["buttons"][1]["action"].startswith("BEDTIME_TURN_OFF_LIGHTS_DELAY::")
 
 
 def test_evaluate_and_notify_persists_sent_state(tmp_path) -> None:
@@ -100,8 +92,6 @@ def test_evaluate_and_notify_persists_sent_state(tmp_path) -> None:
         state=RuntimeState(),
         state_path=state_path,
     )
-    service.update_state("sensor.side_a_presence_start", "2026-05-12T02:05:00+00:00")
-    service.update_state("sensor.side_a_presence_end", "2026-05-12T04:28:30+00:00")
     service.update_state("sensor.pixel_battery_state", "charging")
     service.update_state("sensor.pixel_charger_type", "ac")
 
@@ -126,6 +116,39 @@ def test_handle_action_calls_turn_on_for_configured_script() -> None:
         ("script", "turn_on", {"entity_id": "script.turn_off_all_lights"})
     ]
     assert state.pending_action_token is None
+
+
+def test_handle_delayed_action_schedules_turn_off() -> None:
+    ha = FakeHomeAssistant()
+    state = RuntimeState()
+    token = state.mark_notification_sent("2026-05-11")
+    assert token is not None
+    service = BedtimeService(config(), ha=ha, notifier=FakeNotifier(), state=state)
+    now = datetime.fromisoformat("2026-05-11T22:00:00").replace(tzinfo=NY)
+
+    handled = service.handle_action_sync(f"BEDTIME_TURN_OFF_LIGHTS_DELAY::{token.token}", now=now)
+
+    assert handled is True
+    assert ha.calls == []
+    assert state.pending_action_token is None
+    assert state.delayed_action_due_at == now + timedelta(minutes=30)
+
+
+def test_run_due_actions_calls_configured_script_once() -> None:
+    ha = FakeHomeAssistant()
+    state = RuntimeState()
+    token = state.mark_notification_sent("2026-05-11")
+    assert token is not None
+    service = BedtimeService(config(), ha=ha, notifier=FakeNotifier(), state=state)
+    now = datetime.fromisoformat("2026-05-11T22:00:00").replace(tzinfo=NY)
+    assert service.handle_action_sync(f"BEDTIME_TURN_OFF_LIGHTS_DELAY::{token.token}", now=now)
+
+    assert service.run_due_actions_sync(now + timedelta(minutes=30))
+    assert not service.run_due_actions_sync(now + timedelta(minutes=31))
+
+    assert ha.calls == [
+        ("script", "turn_on", {"entity_id": "script.turn_off_all_lights"})
+    ]
 
 
 def test_handle_action_persists_handled_state(tmp_path) -> None:

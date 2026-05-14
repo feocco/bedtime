@@ -2,15 +2,7 @@ timezone: America/New_York
 night_window:
   start: "21:45"
   end: "04:00"
-presence_fresh_minutes: 20
-
-people:
-  - name: Sleeper A
-    presence_start_entity: sensor.side_a_presence_start
-    presence_end_entity: sensor.side_a_presence_end
-  - name: Sleeper B
-    presence_start_entity: sensor.side_b_presence_start
-    presence_end_entity: sensor.side_b_presence_end
+delayed_action_minutes: 30
 
 pixel:
   battery_state_entity: sensor.phone_battery_state
