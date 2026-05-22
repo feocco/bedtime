@@ -10,6 +10,10 @@ schedule the same action after the configured delay. When either action fires,
 the service calls the configured Home Assistant script, usually
 `script.turn_off_all_lights`.
 
+The service also keeps a local per-night usage history. If a bedtime notification
+was sent and no action was used, it sends one morning follow-up notification
+with an inline text reply action for recording why it was skipped.
+
 ## Configuration
 
 Runtime secrets come from environment variables. Personal Home Assistant entity

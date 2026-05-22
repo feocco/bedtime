@@ -32,6 +32,14 @@ class NotificationConfig:
 
 
 @dataclass(frozen=True)
+class MorningPromptConfig:
+    title: str
+    message: str
+    reply_button_title: str
+    reply_placeholder: str
+
+
+@dataclass(frozen=True)
 class BedtimeConfig:
     timezone: str
     night_window: NightWindowConfig
@@ -39,6 +47,9 @@ class BedtimeConfig:
     action: ActionConfig
     delayed_action_minutes: int
     notification: NotificationConfig
+    morning_prompt_time: str
+    history_retention_days: int
+    morning_prompt: MorningPromptConfig
 
     @property
     def watched_entities(self) -> set[str]:
@@ -70,6 +81,7 @@ def parse_bedtime_config(raw: dict[str, Any]) -> BedtimeConfig:
     pixel = _mapping(raw, "pixel")
     action = _mapping(raw, "action")
     notification = _mapping(raw, "notification")
+    morning_prompt = _optional_mapping(raw, "morning_prompt")
     return BedtimeConfig(
         timezone=_string(raw, "timezone"),
         night_window=NightWindowConfig(
@@ -85,6 +97,22 @@ def parse_bedtime_config(raw: dict[str, Any]) -> BedtimeConfig:
         notification=NotificationConfig(
             title=_string(notification, "title"),
             message=_string(notification, "message"),
+        ),
+        morning_prompt_time=_string_or_default(raw, "morning_prompt_time", "08:30"),
+        history_retention_days=int(raw.get("history_retention_days", 180)),
+        morning_prompt=MorningPromptConfig(
+            title=_string_or_default(morning_prompt, "title", "Bedtime follow-up"),
+            message=_string_or_default(
+                morning_prompt,
+                "message",
+                "You did not use the bedtime lights alert last night. Why?",
+            ),
+            reply_button_title=_string_or_default(morning_prompt, "reply_button_title", "Send"),
+            reply_placeholder=_string_or_default(
+                morning_prompt,
+                "reply_placeholder",
+                "Why didn't you use it?",
+            ),
         ),
     )
 
@@ -106,10 +134,26 @@ def _mapping(raw: dict[str, Any], key: str) -> dict[str, Any]:
     return value
 
 
+def _optional_mapping(raw: dict[str, Any], key: str) -> dict[str, Any]:
+    value = raw.get(key, {})
+    if not isinstance(value, dict):
+        raise ValueError(f"{key} must be a mapping")
+    return value
+
+
 def _string(raw: dict[str, Any], key: str) -> str:
     value = raw.get(key)
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{key} is required")
+    return value.strip()
+
+
+def _string_or_default(raw: dict[str, Any], key: str, default: str) -> str:
+    value = raw.get(key)
+    if value is None:
+        return default
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{key} must be a non-empty string")
     return value.strip()
 
 

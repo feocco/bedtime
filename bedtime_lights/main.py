@@ -45,6 +45,8 @@ async def run() -> None:
         service.update_states(states)
         await service.evaluate_and_notify_now()
         await service.run_due_actions()
+        await service.evaluate_morning_prompt_now()
+        service.prune_history()
         ha.add_event_handler(service.handle_event)
         await ha.subscribe_events("state_changed")
         await ha.subscribe_events("mobile_app_notification_action")
@@ -84,6 +86,8 @@ async def _reconcile_loop(
         service.update_states(states)
         await service.evaluate_and_notify_now()
         await service.run_due_actions()
+        await service.evaluate_morning_prompt_now()
+        service.prune_history()
         state.save(state_path)
 
 

@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from bedtime_lights.config import (
     ActionConfig,
     BedtimeConfig,
+    MorningPromptConfig,
     NightWindowConfig,
     NotificationConfig,
     PixelConfig,
@@ -57,6 +58,14 @@ def config() -> BedtimeConfig:
             title="Bedtime lights",
             message="Turn off the lights?",
         ),
+        morning_prompt_time="08:30",
+        history_retention_days=180,
+        morning_prompt=MorningPromptConfig(
+            title="Bedtime follow-up",
+            message="Why did you skip the lights alert?",
+            reply_button_title="Send",
+            reply_placeholder="Why didn't you use it?",
+        ),
     )
 
 
@@ -81,6 +90,7 @@ def test_evaluate_and_notify_sends_once_with_action_button() -> None:
     assert notifier.sends[0]["buttons"][0]["action"].startswith("BEDTIME_TURN_OFF_LIGHTS::")
     assert notifier.sends[0]["buttons"][1]["title"] == "Turn off in 30 min"
     assert notifier.sends[0]["buttons"][1]["action"].startswith("BEDTIME_TURN_OFF_LIGHTS_DELAY::")
+    assert state.history["2026-05-11"].notification_sent_at == now
 
 
 def test_evaluate_and_notify_persists_sent_state(tmp_path) -> None:
@@ -116,6 +126,8 @@ def test_handle_action_calls_turn_on_for_configured_script() -> None:
         ("script", "turn_on", {"entity_id": "script.turn_off_all_lights"})
     ]
     assert state.pending_action_token is None
+    assert state.history["2026-05-11"].action_used
+    assert state.history["2026-05-11"].action_type == "immediate"
 
 
 def test_handle_delayed_action_schedules_turn_off() -> None:
@@ -132,6 +144,8 @@ def test_handle_delayed_action_schedules_turn_off() -> None:
     assert ha.calls == []
     assert state.pending_action_token is None
     assert state.delayed_action_due_at == now + timedelta(minutes=30)
+    assert state.history["2026-05-11"].action_used
+    assert state.history["2026-05-11"].action_type == "delayed"
 
 
 def test_run_due_actions_calls_configured_script_once() -> None:
@@ -149,6 +163,7 @@ def test_run_due_actions_calls_configured_script_once() -> None:
     assert ha.calls == [
         ("script", "turn_on", {"entity_id": "script.turn_off_all_lights"})
     ]
+    assert state.history["2026-05-11"].delayed_action_ran_at == now + timedelta(minutes=30)
 
 
 def test_handle_action_persists_handled_state(tmp_path) -> None:
@@ -179,3 +194,83 @@ def test_handle_action_ignores_stale_token() -> None:
 
     assert handled is False
     assert ha.calls == []
+
+
+def test_morning_prompt_sends_once_for_missed_notification() -> None:
+    notifier = FakeNotifier()
+    state = RuntimeState()
+    state.mark_notification_sent(
+        "2026-05-11",
+        sent_at=datetime.fromisoformat("2026-05-11T22:00:00").replace(tzinfo=NY),
+    )
+    service = BedtimeService(config(), ha=FakeHomeAssistant(), notifier=notifier, state=state)
+
+    before = datetime.fromisoformat("2026-05-12T08:29:00").replace(tzinfo=NY)
+    due = datetime.fromisoformat("2026-05-12T08:30:00").replace(tzinfo=NY)
+    assert not service.evaluate_morning_prompt_now_sync(before)
+    assert service.evaluate_morning_prompt_now_sync(due)
+    assert not service.evaluate_morning_prompt_now_sync(due + timedelta(minutes=1))
+
+    assert len(notifier.sends) == 1
+    assert notifier.sends[0]["tag"] == "bedtime-lights-follow-up"
+    assert notifier.sends[0]["buttons"] == [
+        {
+            "title": "Reply",
+            "action": notifier.sends[0]["buttons"][0]["action"],
+            "behavior": "textInput",
+            "textInputButtonTitle": "Send",
+            "textInputPlaceholder": "Why didn't you use it?",
+        }
+    ]
+    assert notifier.sends[0]["buttons"][0]["action"].startswith("BEDTIME_MISSED_REASON::")
+
+
+def test_morning_prompt_skips_used_notification() -> None:
+    notifier = FakeNotifier()
+    state = RuntimeState()
+    token = state.mark_notification_sent("2026-05-11")
+    assert token is not None
+    state.mark_action_handled(token.token)
+    service = BedtimeService(config(), ha=FakeHomeAssistant(), notifier=notifier, state=state)
+
+    due = datetime.fromisoformat("2026-05-12T08:30:00").replace(tzinfo=NY)
+    assert not service.evaluate_morning_prompt_now_sync(due)
+
+    assert notifier.sends == []
+
+
+def test_feedback_reply_event_records_reply_text() -> None:
+    state = RuntimeState()
+    state.mark_notification_sent(
+        "2026-05-11",
+        sent_at=datetime.fromisoformat("2026-05-11T22:00:00").replace(tzinfo=NY),
+    )
+    prompt = state.mark_morning_prompt_sent(
+        "2026-05-11",
+        sent_at=datetime.fromisoformat("2026-05-12T08:30:00").replace(tzinfo=NY),
+    )
+    assert prompt is not None
+    service = BedtimeService(config(), ha=FakeHomeAssistant(), notifier=FakeNotifier(), state=state)
+
+    handled = service.handle_action_sync(
+        f"BEDTIME_MISSED_REASON::{prompt.token}",
+        now=datetime.fromisoformat("2026-05-12T08:35:00").replace(tzinfo=NY),
+        reply_text="Already off",
+    )
+
+    assert handled is True
+    assert state.history["2026-05-11"].feedback_text == "Already off"
+    assert state.history["2026-05-11"].feedback_token is None
+
+
+def test_feedback_reply_ignores_stale_token() -> None:
+    state = RuntimeState()
+    service = BedtimeService(config(), ha=FakeHomeAssistant(), notifier=FakeNotifier(), state=state)
+
+    handled = service.handle_action_sync(
+        "BEDTIME_MISSED_REASON::stale",
+        now=datetime.fromisoformat("2026-05-12T08:35:00").replace(tzinfo=NY),
+        reply_text="Already off",
+    )
+
+    assert handled is False

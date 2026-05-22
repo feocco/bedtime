@@ -3,6 +3,8 @@ night_window:
   start: "21:45"
   end: "04:00"
 delayed_action_minutes: 30
+morning_prompt_time: "08:30"
+history_retention_days: 180
 
 pixel:
   battery_state_entity: sensor.phone_battery_state
@@ -14,3 +16,9 @@ action:
 notification:
   title: Bedtime lights
   message: It looks like bedtime. Turn off the lights?
+
+morning_prompt:
+  title: Bedtime follow-up
+  message: You did not use the bedtime lights alert last night. Why?
+  reply_button_title: Send
+  reply_placeholder: Why didn't you use it?

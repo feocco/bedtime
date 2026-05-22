@@ -18,10 +18,21 @@ def test_parse_bedtime_config_requires_only_phone_and_action_entities() -> None:
                 "title": "Bedtime lights",
                 "message": "Turn off the lights?",
             },
+            "morning_prompt_time": "08:30",
+            "history_retention_days": 180,
+            "morning_prompt": {
+                "title": "Bedtime follow-up",
+                "message": "Why did you skip the lights alert?",
+                "reply_button_title": "Send",
+                "reply_placeholder": "Why didn't you use it?",
+            },
         }
     )
 
     assert config.delayed_action_minutes == 30
+    assert config.morning_prompt_time == "08:30"
+    assert config.history_retention_days == 180
+    assert config.morning_prompt.reply_placeholder == "Why didn't you use it?"
     assert config.watched_entities == {
         "sensor.phone_battery_state",
         "sensor.phone_charger_type",
