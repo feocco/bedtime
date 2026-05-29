@@ -14,6 +14,10 @@ The service also keeps a local per-night usage history. If a bedtime notificatio
 was sent and no action was used, it sends one morning follow-up notification
 with an inline text reply action for recording why it was skipped.
 
+The Home Assistant WebSocket is treated as a long-running connection. If a
+periodic reconcile or event stream fails, the service closes the client,
+reconnects, validates state, and re-subscribes instead of exiting the process.
+
 ## Configuration
 
 Runtime secrets come from environment variables. Personal Home Assistant entity
