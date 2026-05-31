@@ -5,9 +5,9 @@ Small Home Assistant service that sends one bedtime notification per night when:
 - the local time is inside the configured night window
 - the configured phone battery state is charging or full on a real charger
 
-The notification includes mobile action buttons to turn lights off immediately or
-schedule the same action after the configured delay. When either action fires,
-the service calls the configured Home Assistant script, usually
+The notification includes mobile action buttons to turn lights off immediately,
+schedule the same action after 1 minute, or schedule it after the configured
+delay. When an action fires, the service calls the configured Home Assistant script, usually
 `script.turn_off_all_lights`.
 
 The service also keeps a local per-night usage history. If a bedtime notification

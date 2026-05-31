@@ -88,8 +88,10 @@ def test_evaluate_and_notify_sends_once_with_action_button() -> None:
     assert notifier.sends[0]["group"] == "bedtime-lights"
     assert notifier.sends[0]["buttons"][0]["title"] == "Turn off lights"
     assert notifier.sends[0]["buttons"][0]["action"].startswith("BEDTIME_TURN_OFF_LIGHTS::")
-    assert notifier.sends[0]["buttons"][1]["title"] == "Turn off in 30 min"
-    assert notifier.sends[0]["buttons"][1]["action"].startswith("BEDTIME_TURN_OFF_LIGHTS_DELAY::")
+    assert notifier.sends[0]["buttons"][1]["title"] == "Turn off in 1 min"
+    assert notifier.sends[0]["buttons"][1]["action"].startswith("BEDTIME_TURN_OFF_LIGHTS_DELAY_1::")
+    assert notifier.sends[0]["buttons"][2]["title"] == "Turn off in 30 min"
+    assert notifier.sends[0]["buttons"][2]["action"].startswith("BEDTIME_TURN_OFF_LIGHTS_DELAY::")
     assert state.history["2026-05-11"].notification_sent_at == now
 
 
@@ -144,6 +146,24 @@ def test_handle_delayed_action_schedules_turn_off() -> None:
     assert ha.calls == []
     assert state.pending_action_token is None
     assert state.delayed_action_due_at == now + timedelta(minutes=30)
+    assert state.history["2026-05-11"].action_used
+    assert state.history["2026-05-11"].action_type == "delayed"
+
+
+def test_handle_one_minute_delayed_action_schedules_turn_off() -> None:
+    ha = FakeHomeAssistant()
+    state = RuntimeState()
+    token = state.mark_notification_sent("2026-05-11")
+    assert token is not None
+    service = BedtimeService(config(), ha=ha, notifier=FakeNotifier(), state=state)
+    now = datetime.fromisoformat("2026-05-11T22:00:00").replace(tzinfo=NY)
+
+    handled = service.handle_action_sync(f"BEDTIME_TURN_OFF_LIGHTS_DELAY_1::{token.token}", now=now)
+
+    assert handled is True
+    assert ha.calls == []
+    assert state.pending_action_token is None
+    assert state.delayed_action_due_at == now + timedelta(minutes=1)
     assert state.history["2026-05-11"].action_used
     assert state.history["2026-05-11"].action_type == "delayed"
 

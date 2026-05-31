@@ -20,6 +20,7 @@ from bedtime_lights.runtime_state import RuntimeState
 
 LOGGER = logging.getLogger(__name__)
 ACTION_PREFIX = "BEDTIME_TURN_OFF_LIGHTS"
+ONE_MINUTE_DELAY_ACTION_PREFIX = "BEDTIME_TURN_OFF_LIGHTS_DELAY_1"
 DELAY_ACTION_PREFIX = "BEDTIME_TURN_OFF_LIGHTS_DELAY"
 FEEDBACK_ACTION_PREFIX = "BEDTIME_MISSED_REASON"
 NOTIFICATION_TAG = "bedtime-lights"
@@ -44,6 +45,7 @@ class BedtimeService:
         self.entity_states: dict[str, str] = {}
         self.action_router = NotificationActionRouter()
         self.action_router.register(ACTION_PREFIX, self._handle_action_value_sync)
+        self.action_router.register(ONE_MINUTE_DELAY_ACTION_PREFIX, self._handle_action_value_sync)
         self.action_router.register(DELAY_ACTION_PREFIX, self._handle_action_value_sync)
         self.action_router.register(FEEDBACK_ACTION_PREFIX, self._handle_action_value_sync)
 
@@ -69,6 +71,10 @@ class BedtimeService:
         if token is None:
             return False
         action = NotificationActionRouter.make_action(ACTION_PREFIX, token.token)
+        one_minute_delay_action = NotificationActionRouter.make_action(
+            ONE_MINUTE_DELAY_ACTION_PREFIX,
+            token.token,
+        )
         delay_action = NotificationActionRouter.make_action(DELAY_ACTION_PREFIX, token.token)
         await self.notifier.send(
             title=self.config.notification.title,
@@ -77,6 +83,7 @@ class BedtimeService:
             group=NOTIFICATION_TAG,
             buttons=[
                 {"title": "Turn off lights", "action": action},
+                {"title": "Turn off in 1 min", "action": one_minute_delay_action},
                 {
                     "title": f"Turn off in {self.config.delayed_action_minutes} min",
                     "action": delay_action,
@@ -107,14 +114,14 @@ class BedtimeService:
             self._save_state()
             LOGGER.info("Recorded bedtime lights feedback")
             return True
+        if prefix == ONE_MINUTE_DELAY_ACTION_PREFIX:
+            return self._schedule_delayed_action(token, minutes=1, now=now)
         if prefix == DELAY_ACTION_PREFIX:
-            due_at = now + timedelta(minutes=self.config.delayed_action_minutes)
-            if not self.state.schedule_delayed_action(token, due_at=due_at, clicked_at=now):
-                LOGGER.info("Ignoring stale bedtime lights delay action")
-                return False
-            self._save_state()
-            LOGGER.info("Scheduled %s for %s", self.config.action.script_entity, due_at.isoformat())
-            return True
+            return self._schedule_delayed_action(
+                token,
+                minutes=self.config.delayed_action_minutes,
+                now=now,
+            )
         if prefix != ACTION_PREFIX:
             return False
         if not self.state.mark_action_handled(token, clicked_at=now):
@@ -144,6 +151,15 @@ class BedtimeService:
 
     def run_due_actions_sync(self, now: datetime) -> bool:
         return asyncio.run(self.run_due_actions(now))
+
+    def _schedule_delayed_action(self, token: str, *, minutes: int, now: datetime) -> bool:
+        due_at = now + timedelta(minutes=minutes)
+        if not self.state.schedule_delayed_action(token, due_at=due_at, clicked_at=now):
+            LOGGER.info("Ignoring stale bedtime lights delay action")
+            return False
+        self._save_state()
+        LOGGER.info("Scheduled %s for %s", self.config.action.script_entity, due_at.isoformat())
+        return True
 
     async def evaluate_morning_prompt_now(self, now: datetime | None = None) -> bool:
         now = now or datetime.now(ZoneInfo(self.config.timezone))
