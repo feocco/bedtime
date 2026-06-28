@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from bedtime_lights.config import parse_bedtime_config
+from bedtime_lights.config import load_service_config, parse_bedtime_config
 
 
 def test_parse_bedtime_config_requires_only_phone_and_action_entities() -> None:
@@ -38,3 +38,11 @@ def test_parse_bedtime_config_requires_only_phone_and_action_entities() -> None:
         "sensor.phone_charger_type",
         "script.turn_off_all_lights",
     }
+
+
+def test_load_service_config_reads_service_port(monkeypatch) -> None:
+    monkeypatch.setenv("SERVICE_PORT", "8104")
+
+    config = load_service_config()
+
+    assert config.service_port == 8104

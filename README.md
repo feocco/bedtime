@@ -18,6 +18,9 @@ The Home Assistant WebSocket is treated as a long-running connection. If a
 periodic reconcile or event stream fails, the service closes the client,
 reconnects, validates state, and re-subscribes instead of exiting the process.
 
+The process also serves `GET /health` on `SERVICE_PORT` for homelab health
+checks and dashboard status dots.
+
 ## Configuration
 
 Runtime secrets come from environment variables. Personal Home Assistant entity

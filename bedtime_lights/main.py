@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 
 from bedtime_lights.config import load_bedtime_config, load_service_config
 from bedtime_lights.ha import HomeAssistantClient
+from bedtime_lights.health import HealthServer
 from bedtime_lights.notifier import Notifier
 from bedtime_lights.runtime_state import RuntimeState
 from bedtime_lights.service import BedtimeService
@@ -39,34 +40,39 @@ async def run() -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop_event.set)
 
+    health_server = HealthServer(port=service_config.service_port)
+    await health_server.start()
     ha.add_event_handler(service.handle_event)
-    while not stop_event.is_set():
-        try:
-            await _start_connected_service(service, ha, state, service_config.state_path)
-            should_stop = await _run_until_disconnect_or_stop(
-                service,
-                ha,
-                state,
-                service_config.state_path,
-                service_config.reconcile_seconds,
-                stop_event,
-            )
-            if should_stop:
+    try:
+        while not stop_event.is_set():
+            try:
+                await _start_connected_service(service, ha, state, service_config.state_path)
+                should_stop = await _run_until_disconnect_or_stop(
+                    service,
+                    ha,
+                    state,
+                    service_config.state_path,
+                    service_config.reconcile_seconds,
+                    stop_event,
+                )
+                if should_stop:
+                    break
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                if stop_event.is_set():
+                    break
+                LOGGER.exception(
+                    "Bedtime lights watcher lost Home Assistant connection; reconnecting in %s seconds",
+                    RECONNECT_DELAY_SECONDS,
+                )
+            finally:
+                state.save(service_config.state_path)
+                await ha.close()
+            if await _wait_for_reconnect_delay(stop_event, RECONNECT_DELAY_SECONDS):
                 break
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            if stop_event.is_set():
-                break
-            LOGGER.exception(
-                "Bedtime lights watcher lost Home Assistant connection; reconnecting in %s seconds",
-                RECONNECT_DELAY_SECONDS,
-            )
-        finally:
-            state.save(service_config.state_path)
-            await ha.close()
-        if await _wait_for_reconnect_delay(stop_event, RECONNECT_DELAY_SECONDS):
-            break
+    finally:
+        await health_server.stop()
 
 
 async def _start_connected_service(

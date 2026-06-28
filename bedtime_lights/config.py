@@ -67,6 +67,7 @@ class ServiceConfig:
     log_level: str
     dry_run: bool
     reconcile_seconds: int
+    service_port: int
 
 
 def load_bedtime_config(path: str | Path) -> BedtimeConfig:
@@ -124,6 +125,7 @@ def load_service_config() -> ServiceConfig:
         log_level=os.environ.get("LOG_LEVEL", "INFO"),
         dry_run=_env_bool("DRY_RUN", default=False),
         reconcile_seconds=int(os.environ.get("RECONCILE_SECONDS", "60")),
+        service_port=int(os.environ.get("SERVICE_PORT", "8104")),
     )
 
 

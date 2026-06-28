@@ -11,5 +11,6 @@ COPY bedtime_lights ./bedtime_lights
 RUN pip install --no-cache-dir .
 
 VOLUME ["/app/data"]
+EXPOSE 8104
 
 CMD ["bedtime-lights"]
