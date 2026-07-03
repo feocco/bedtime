@@ -19,7 +19,8 @@ periodic reconcile or event stream fails, the service closes the client,
 reconnects, validates state, and re-subscribes instead of exiting the process.
 
 The process also serves `GET /health` on `SERVICE_PORT` for homelab health
-checks and dashboard status dots.
+checks and dashboard status dots. It also serves `GET /docs` for browser docs
+and `GET /openapi.json` for the machine-readable schema.
 
 ## Configuration
 
