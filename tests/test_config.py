@@ -46,3 +46,21 @@ def test_load_service_config_reads_service_port(monkeypatch) -> None:
     config = load_service_config()
 
     assert config.service_port == 8104
+
+
+def test_morning_prompt_enabled_flag() -> None:
+    import pytest
+    from bedtime_lights.config import parse_bedtime_config
+
+    base = {
+        "timezone": "America/New_York",
+        "night_window": {"start": "21:45", "end": "04:00"},
+        "pixel": {"battery_state_entity": "a", "charger_type_entity": "b"},
+        "action": {"script_entity": "script.x"},
+        "notification": {"title": "t", "message": "m"},
+    }
+    assert parse_bedtime_config(base).morning_prompt.enabled is True
+    off = parse_bedtime_config({**base, "morning_prompt": {"enabled": False}})
+    assert off.morning_prompt.enabled is False
+    with pytest.raises(ValueError):
+        parse_bedtime_config({**base, "morning_prompt": {"enabled": "no"}})

@@ -162,6 +162,8 @@ class BedtimeService:
         return True
 
     async def evaluate_morning_prompt_now(self, now: datetime | None = None) -> bool:
+        if not self.config.morning_prompt.enabled:
+            return False
         now = now or datetime.now(ZoneInfo(self.config.timezone))
         night_key = self._morning_prompt_night_key(now)
         if night_key is None:

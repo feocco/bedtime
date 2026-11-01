@@ -1,4 +1,5 @@
 from __future__ import annotations
+from dataclasses import replace
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -294,3 +295,19 @@ def test_feedback_reply_ignores_stale_token() -> None:
     )
 
     assert handled is False
+
+
+def test_morning_prompt_disabled_sends_nothing() -> None:
+    notifier = FakeNotifier()
+    state = RuntimeState()
+    state.mark_notification_sent(
+        "2026-05-11",
+        sent_at=datetime.fromisoformat("2026-05-11T22:00:00").replace(tzinfo=NY),
+    )
+    base = config()
+    disabled = replace(base, morning_prompt=replace(base.morning_prompt, enabled=False))
+    service = BedtimeService(disabled, ha=FakeHomeAssistant(), notifier=notifier, state=state)
+
+    due = datetime.fromisoformat("2026-05-12T08:30:00").replace(tzinfo=NY)
+    assert not service.evaluate_morning_prompt_now_sync(due)
+    assert notifier.sends == []

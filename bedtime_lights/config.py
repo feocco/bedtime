@@ -37,6 +37,7 @@ class MorningPromptConfig:
     message: str
     reply_button_title: str
     reply_placeholder: str
+    enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -114,6 +115,7 @@ def parse_bedtime_config(raw: dict[str, Any]) -> BedtimeConfig:
                 "reply_placeholder",
                 "Why didn't you use it?",
             ),
+            enabled=_bool_or_default(morning_prompt, "enabled", True),
         ),
     )
 
@@ -164,3 +166,10 @@ def _env_bool(name: str, *, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _bool_or_default(raw: dict[str, Any], key: str, default: bool) -> bool:
+    value = raw.get(key, default)
+    if not isinstance(value, bool):
+        raise ValueError(f"{key} must be a boolean")
+    return value
